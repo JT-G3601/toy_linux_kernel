@@ -1,0 +1,25 @@
+# Build output
+/build/
+*.o
+*.a
+*.elf
+*.bin
+*.img
+*.iso
+*.map
+
+# Generated tooling files
+/compile_commands.json
+
+# Runtime and debug output
+*.log
+*.pid
+.gdb_history
+
+# Editor and operating-system noise
+*~
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
