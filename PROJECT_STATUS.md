@@ -5,15 +5,17 @@
 ## 状态元数据
 
 - 最后更新：2026-07-31
-- 更新会话：`20260731-1435-project-readme`
+- 更新会话：`20260731-1451-github-initial-publish`
 - 当前阶段：规划与项目基础设施
 - 当前里程碑：M0 尚未开始
-- 项目版本：尚未初始化 Git 仓库
+- 项目版本：Git `main`，跟踪 `origin/main`
+- GitHub：`https://github.com/JT-G3601/toy_linux_kernel`（public）
 
 ## 已完成
 
 - 已制定 x86_64 toy kernel 的总体实现计划与 M0-M10 验收标准。
 - 已创建面向学习者的根目录 README，说明项目目标、QEMU、架构路线、当前状态和开发入口。
+- 已初始化 Git，并将项目发布到公开 GitHub 仓库。
 - 已建立项目原生的多会话交接协议：
   - 根目录 `AGENTS.md` 自动向新 Codex 会话提供协作规则。
   - `PROJECT_STATUS.md` 保存最新事实。
@@ -45,7 +47,6 @@
 ## 当前已知限制
 
 - QEMU 是另一个项目的本地 debug build；本项目的构建系统需要允许通过 `QEMU` 和 `QEMU_IMG` 变量覆盖路径。
-- 项目尚未初始化 Git，因此暂时没有 commit/branch 可作为会话基线。
 - 尚未验证宿主 GCC 的 freestanding x86_64 链接参数和 QEMU BIOS 搜索路径。
 
 ## 下一步
@@ -61,3 +62,4 @@
 | 2026-07-31 | `20260731-0001-project-session-protocol` | 多会话状态检查脚本 | `PASS`，0 个 active claim |
 | 2026-07-31 | `20260731-0001-project-session-protocol` | 父子 scope 冲突测试 | `PASS`，正确拒绝 `kernel/` 与 `kernel/mm/` |
 | 2026-07-31 | `20260731-1435-project-readme` | README 结构与项目内链接 | `PASS`，5 个链接目标均存在 |
+| 2026-07-31 | `20260731-1451-github-initial-publish` | GitHub 首次发布 | `PASS`，public 仓库、默认 `main` |
