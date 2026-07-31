@@ -5,10 +5,10 @@
 ## 状态元数据
 
 - 最后更新：2026-07-31
-- 更新会话：`20260731-1506-m0-build-foundation`
+- 更新会话：`20260731-1535-push-m0-branch`
 - 当前阶段：M0 工程骨架完成
 - 当前里程碑：M0 `done`；下一里程碑 M1
-- 项目版本：本地 Git 分支 `agent/m0-build`
+- 项目版本：Git `agent/m0-build`，跟踪 `origin/agent/m0-build`
 - GitHub：`https://github.com/JT-G3601/toy_linux_kernel`（public）
 
 ## 已完成
@@ -76,3 +76,4 @@
 | 2026-07-31 | `20260731-1506-m0-build-foundation` | GCC/Clang clean build 与 `make verify` | `PASS` |
 | 2026-07-31 | `20260731-1506-m0-build-foundation` | 跨绝对路径重复构建 | `PASS`，kernel/image SHA-256 分别一致 |
 | 2026-07-31 | `20260731-1506-m0-build-foundation` | QEMU run/debug 入口 | `PASS`，均保持运行至测试超时 |
+| 2026-07-31 | `20260731-1535-push-m0-branch` | 推送远程 M0 分支 | `PASS`，本地与远程 ref 一致 |
