@@ -9,7 +9,7 @@
 | `TASK-INFRA-001` | `done` | 项目基础设施 | 建立多会话状态、claim、日志和检查协议 | `TASK-PLAN-001` | `20260731-0001-project-session-protocol` |
 | `TASK-DOC-001` | `done` | 项目文档 | 编写根目录 README | `TASK-INFRA-001` | `20260731-1435-project-readme` |
 | `TASK-PUBLISH-001` | `done` | 项目发布 | 初始化 Git 并发布公开 GitHub 仓库 | `TASK-DOC-001` | `20260731-1451-github-initial-publish` |
-| `TASK-M0-001` | `todo` | M0 | Makefile、链接骨架、工具检测、镜像与运行入口 | `TASK-INFRA-001` | - |
+| `TASK-M0-001` | `done` | M0 | Makefile、链接骨架、工具检测、镜像与运行入口 | `TASK-INFRA-001` | `20260731-1506-m0-build-foundation` |
 | `TASK-M1-001` | `todo` | M1 | 512 字节 stage1 bootloader | `TASK-M0-001` | - |
 | `TASK-M2-001` | `todo` | M2 | stage2、E820、ELF64 loader、long mode | `TASK-M1-001` | - |
 | `TASK-M3-001` | `todo` | M3 | console、GDT/IDT/TSS、异常、PIC/PIT、键盘 | `TASK-M2-001` | - |
