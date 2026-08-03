@@ -50,6 +50,8 @@ resolve_tool bash bash required
 resolve_tool dd dd required
 resolve_tool truncate truncate required
 resolve_tool cmp cmp required
+resolve_tool od od required
+resolve_tool timeout timeout required
 resolve_tool sha256sum sha256sum required
 resolve_tool qemu "${QEMU:-}" required
 resolve_tool qemu-img "${QEMU_IMG:-}" optional

@@ -1,28 +1,59 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if (($# != 4)); then
-    printf 'usage: %s KERNEL_ELF IMAGE IMAGE_SIZE KERNEL_DISK_OFFSET\n' "$0" >&2
+if (($# != 6)); then
+    printf 'usage: %s STAGE1 STAGE2 KERNEL_ELF IMAGE IMAGE_SIZE KERNEL_DISK_OFFSET\n' "$0" >&2
     exit 2
 fi
 
-KERNEL_ELF=$1
-IMAGE=$2
-EXPECTED_IMAGE_SIZE=$3
-KERNEL_DISK_OFFSET=$4
+STAGE1=$1
+STAGE2=$2
+KERNEL_ELF=$3
+IMAGE=$4
+EXPECTED_IMAGE_SIZE=$5
+KERNEL_DISK_OFFSET=$6
 READELF=${READELF:-readelf}
+SECTOR_SIZE=512
+STAGE2_DISK_OFFSET=$SECTOR_SIZE
 
 fail() {
     printf 'verify: FAIL: %s\n' "$*" >&2
     exit 1
 }
 
+[[ -f "$STAGE1" ]] || fail "missing stage1: $STAGE1"
+[[ -f "$STAGE2" ]] || fail "missing stage2: $STAGE2"
 [[ -f "$KERNEL_ELF" ]] || fail "missing kernel ELF: $KERNEL_ELF"
 [[ -f "$IMAGE" ]] || fail "missing disk image: $IMAGE"
 
 ACTUAL_IMAGE_SIZE=$(stat -c '%s' "$IMAGE")
 [[ "$ACTUAL_IMAGE_SIZE" == "$EXPECTED_IMAGE_SIZE" ]] ||
     fail "image size is $ACTUAL_IMAGE_SIZE, expected $EXPECTED_IMAGE_SIZE"
+
+STAGE1_SIZE=$(stat -c '%s' "$STAGE1")
+[[ "$STAGE1_SIZE" == "$SECTOR_SIZE" ]] ||
+    fail "stage1 is $STAGE1_SIZE bytes, expected exactly 512"
+STAGE1_SIGNATURE=$(od -An -tx1 -j510 -N2 "$STAGE1" | tr -d '[:space:]')
+[[ "$STAGE1_SIGNATURE" == 55aa ]] || fail "stage1 lacks the 0xAA55 signature"
+cmp -s -n "$STAGE1_SIZE" "$STAGE1" "$IMAGE" ||
+    fail "stage1 bytes do not match image LBA 0"
+
+STAGE2_SIZE=$(stat -c '%s' "$STAGE2")
+((STAGE2_SIZE >= 4)) || fail "stage2 is too small to contain its header"
+((STAGE2_DISK_OFFSET + STAGE2_SIZE <= KERNEL_DISK_OFFSET)) ||
+    fail "stage2 exceeds reserved LBA 1..127"
+STAGE2_MAGIC=$(dd if="$STAGE2" bs=1 count=4 status=none)
+[[ "$STAGE2_MAGIC" == S2OK ]] || fail "stage2 lacks the S2OK header"
+dd if="$IMAGE" bs=1 skip="$STAGE2_DISK_OFFSET" count="$STAGE2_SIZE" status=none |
+    cmp -s "$STAGE2" - || fail "stage2 bytes do not match image LBA 1"
+
+ZERO_START=$((STAGE2_DISK_OFFSET + STAGE2_SIZE))
+ZERO_SIZE=$((KERNEL_DISK_OFFSET - ZERO_START))
+if ((ZERO_SIZE > 0)); then
+    dd if="$IMAGE" bs=1 skip="$ZERO_START" count="$ZERO_SIZE" status=none |
+        cmp -s -n "$ZERO_SIZE" - /dev/zero ||
+        fail "unused stage2 reserved area is not zero-filled"
+fi
 
 ELF_HEADER=$("$READELF" -hW "$KERNEL_ELF")
 grep -q 'Class:[[:space:]]*ELF64' <<<"$ELF_HEADER" ||
@@ -60,10 +91,9 @@ dd if="$IMAGE" bs=1 skip="$KERNEL_DISK_OFFSET" count="$KERNEL_SIZE" status=none 
     cmp -s "$KERNEL_ELF" - ||
     fail "kernel bytes do not match image payload"
 
-cmp -s -n "$KERNEL_DISK_OFFSET" "$IMAGE" /dev/zero ||
-    fail "reserved boot area is not zero-filled in M0"
-
 printf 'verify: PASS\n'
+printf '  stage1: %s bytes, signature 0xAA55\n' "$STAGE1_SIZE"
+printf '  stage2: %s bytes, header S2OK\n' "$STAGE2_SIZE"
 printf '  kernel: %s bytes, entry %s\n' "$KERNEL_SIZE" "$ENTRY_HEX"
 printf '  image:  %s bytes, payload offset %s\n' \
     "$ACTUAL_IMAGE_SIZE" "$KERNEL_DISK_OFFSET"

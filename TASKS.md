@@ -10,8 +10,9 @@
 | `TASK-DOC-001` | `done` | 项目文档 | 编写根目录 README | `TASK-INFRA-001` | `20260731-1435-project-readme` |
 | `TASK-PUBLISH-001` | `done` | 项目发布 | 初始化 Git 并发布公开 GitHub 仓库 | `TASK-DOC-001` | `20260731-1451-github-initial-publish` |
 | `TASK-PUBLISH-002` | `done` | 项目发布 | 推送 M0 功能分支 | `TASK-M0-001` | `20260731-1535-push-m0-branch` |
+| `TASK-PUBLISH-003` | `in_progress` | 项目发布 | 提交并推送 M1 改动，创建 draft PR | `TASK-M1-001` | `20260803-1721-publish-m1` |
 | `TASK-M0-001` | `done` | M0 | Makefile、链接骨架、工具检测、镜像与运行入口 | `TASK-INFRA-001` | `20260731-1506-m0-build-foundation` |
-| `TASK-M1-001` | `todo` | M1 | 512 字节 stage1 bootloader | `TASK-M0-001` | - |
+| `TASK-M1-001` | `done` | M1 | 512 字节 stage1 bootloader | `TASK-M0-001` | `20260803-1657-m1-stage1` |
 | `TASK-M2-001` | `todo` | M2 | stage2、E820、ELF64 loader、long mode | `TASK-M1-001` | - |
 | `TASK-M3-001` | `todo` | M3 | console、GDT/IDT/TSS、异常、PIC/PIT、键盘 | `TASK-M2-001` | - |
 | `TASK-M4-001` | `todo` | M4 | PMM、VMM、最终页表与内核堆 | `TASK-M3-001` | - |

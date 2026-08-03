@@ -6,9 +6,10 @@
 
 > **当前状态**
 >
-> M0 构建基础已经完成：项目能构建 freestanding x86_64 higher-half kernel ELF，
-> 生成并验证确定性的 16 MiB 原始磁盘镜像，也能由 QEMU 加载。M0 镜像刻意没有
-> boot sector，因此尚不能启动内核；真正的 BIOS 启动链从 M1 开始。准确进度请查看
+> M1 stage1 已完成：项目能构建严格 512 字节的 BIOS boot sector，使用
+> INT 13h extensions 读取 stage2，并在 QEMU 中观察到 `S1 -> S2`。损坏
+> stage2 交接头时，stage1 会输出 `E2` 并拒绝跳转。higher-half kernel ELF
+> 已包含在镜像中，但要到 M2 才会被 stage2 加载和执行。准确进度请查看
 > [PROJECT_STATUS.md](PROJECT_STATUS.md)。
 
 ## 最终要实现什么
@@ -109,7 +110,7 @@ Makefile 会先检查 `PATH`，再检查当前机器的本地 QEMU 路径，也�
 | 里程碑 | 内容 | 当前状态 |
 |---|---|---|
 | M0 | 工程骨架、工具检测、可重复构建 | 完成 |
-| M1 | 512 字节 stage1 | 未开始 |
+| M1 | 512 字节 stage1 | 完成 |
 | M2 | stage2、E820、ELF loader、long mode | 未开始 |
 | M3 | console、中断、PIC/PIT、键盘 | 未开始 |
 | M4 | PMM、VMM、最终页表、内核堆 | 未开始 |
@@ -130,14 +131,17 @@ Makefile 会先检查 `PATH`，再检查当前机器的本地 QEMU 路径，也�
 make doctor
 make image
 make verify
+make test-boot
 ```
 
 这些命令目前已经可用：
 
 - `make doctor`：检查编译器、binutils、QEMU 和可选 GDB。
 - `make` / `make image`：编译 kernel ELF 并生成 `build/toy-linux.img`。
-- `make verify`：检查 ELF 类型、入口、符号和磁盘镜像布局。
-- `make run`：让 QEMU 加载 M0 镜像；BIOS 报告 non-bootable 属于预期结果。
+- `make boot`：只构建 512-byte stage1 和 M1 stage2 占位程序。
+- `make verify`：检查 boot signature、stage2 交接头、ELF 和磁盘镜像布局。
+- `make test-boot`：用 QEMU 验证正常交接和损坏 stage2 的错误路径。
+- `make run`：运行 M1 镜像，串口应输出 `S1` 和 `S2`。
 - `make debug`：让 QEMU 暂停在启动位置并开放 GDB remote。
 - `make clean`：只删除 `build/`。
 
@@ -151,8 +155,8 @@ ld
 QEMU 11.0.2（使用上面的本地路径）
 ```
 
-GDB 当前尚未在 `PATH` 中检测到，但它在 M0 是可选工具。构建参数、产物和镜像布局详见
-[docs/build.md](docs/build.md)。
+GDB 当前尚未在 `PATH` 中检测到，但它在 M1 是可选工具。构建参数、产物和镜像布局详见
+[docs/build.md](docs/build.md)，启动契约见 [docs/boot.md](docs/boot.md)。
 
 ## 当前目录导航
 
@@ -165,6 +169,9 @@ GDB 当前尚未在 `PATH` 中检测到，但它在 M0 是可选工具。构建�
 ├── TASKS.md               # 任务状态与依赖
 ├── DECISIONS.md           # 架构决策索引
 ├── Makefile               # 构建、验证和 QEMU 入口
+├── boot/
+│   ├── stage1.S           # 512-byte Legacy BIOS boot sector
+│   └── stage2.S           # M1 交接占位程序
 ├── kernel/
 │   ├── arch/x86_64/       # 64 位内核入口
 │   ├── include/kernel/    # freestanding 公共类型
@@ -174,16 +181,18 @@ GDB 当前尚未在 `PATH` 中检测到，但它在 M0 是可选工具。构建�
 │   ├── claims/            # 活动/已关闭的写入范围 claim
 │   ├── decisions/         # 完整架构决策
 │   ├── sessions/          # 每次写会话的操作和结果
-│   └── build.md           # M0 构建与镜像布局
+│   ├── boot.md            # M1 启动流程、错误码和测试
+│   └── build.md           # 构建参数与镜像布局
 └── tools/
     ├── doctor.sh          # 宿主工具检测
     ├── mkimage.sh         # 确定性磁盘镜像生成
     ├── verify-image.sh    # ELF 与镜像检查
+    ├── test-boot.sh       # QEMU 正常/损坏 stage2 测试
     ├── project-context.sh
     └── check-project-state.sh
 ```
 
-`boot/`、`user/` 和 `tests/` 会在对应里程碑开始时逐步建立，不预先创建空目录。
+`user/` 和 `tests/` 会在对应里程碑开始时逐步建立，不预先创建空目录。
 
 ## 多会话开发
 

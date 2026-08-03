@@ -4,11 +4,11 @@
 
 ## 状态元数据
 
-- 最后更新：2026-07-31
-- 更新会话：`20260731-1535-push-m0-branch`
-- 当前阶段：M0 工程骨架完成
-- 当前里程碑：M0 `done`；下一里程碑 M1
-- 项目版本：Git `agent/m0-build`，跟踪 `origin/agent/m0-build`
+- 最后更新：2026-08-03
+- 更新会话：`20260803-1657-m1-stage1`
+- 当前阶段：M1 Legacy BIOS stage1 完成
+- 当前里程碑：M1 `done`；下一里程碑 M2
+- 项目版本：Git `agent/m0-build` 工作区，HEAD `e1da9c5`；M1 改动尚未提交
 - GitHub：`https://github.com/JT-G3601/toy_linux_kernel`（public）
 
 ## 已完成
@@ -22,6 +22,15 @@
   - 可重复生成并验证 16 MiB `build/toy-linux.img`。
   - kernel ELF 固定存放在镜像 LBA 128。
   - `make doctor/image/verify/run/debug/clean` 已可用。
+- 已完成 M1 Legacy BIOS stage1：
+  - stage1 严格为 512 字节，带有 `0xAA55` boot signature。
+  - 已初始化实模式段寄存器与栈，并保存 BIOS boot drive。
+  - 已用 INT 13h extensions 从 LBA 1..127 读取 stage2 到物理地址
+    `0x8000`，具备三次重试与 disk reset。
+  - stage1 在 VGA 与 COM1 输出 `S1`/`E1`/`E2`，校验 `S2OK` 头后才跳转。
+  - M1 最小 stage2 占位程序会输出 `S2` 后停机。
+  - `make test-boot` 已验证正常 `S1 -> S2` 与损坏交接头时
+    `S1 -> E2` 且不跳转的路径。
 - 已建立项目原生的多会话交接协议：
   - 根目录 `AGENTS.md` 自动向新 Codex 会话提供协作规则。
   - `PROJECT_STATUS.md` 保存最新事实。
@@ -34,10 +43,11 @@
 
 ## 尚未实现
 
-- stage1/stage2 bootloader 尚未实现，当前 M0 镜像不可启动。
+- stage2 目前只是 M1 交接占位程序，尚未实现 E820、ELF64 loader、页表或
+  long mode；当前启动链不会进入 kernel `_start`。
 - console、中断、内存管理、调度等实际内核子系统尚未实现。
 - 用户态、系统调用、VFS 和持久化文件系统尚未实现。
-- 当前有构建/镜像自动验证，但还没有可执行的启动或内核功能测试。
+- 已有 stage1/stage2 交接的 QEMU 启动测试，但还没有内核功能测试。
 
 ## 已验证的开发环境
 
@@ -55,13 +65,14 @@
 
 - `qemu-system-x86_64` 是另一个项目的本地 debug build，不在 `PATH`；Makefile
   可以自动探测该路径，也允许用 `QEMU` 覆盖。
-- M0 磁盘保留区全零且没有 `0xAA55` boot signature，BIOS non-bootable 是预期结果。
+- stage2 的 `S2OK` 是交接头校验，不是整个 stage2 的完整性 checksum。
+- M1 stage2 占位程序会有意停机；这是 M2 实现前的预期结果。
 - QEMU GDB server 已验证，但本机还没有 GDB 客户端。
 
 ## 下一步
 
-执行 `TASK-M1-001`：在 LBA 0 实现严格 512 字节的 stage1 bootloader。磁盘布局必须遵守
-`ADR-0003`。
+执行 `TASK-M2-001`：将 M1 stage2 占位程序替换为 E820/ELF64 loader，建立页表并
+进入 long mode。继续遵守 `ADR-0003` 和 `ADR-0004`。
 
 ## 最近验证
 
@@ -77,3 +88,6 @@
 | 2026-07-31 | `20260731-1506-m0-build-foundation` | 跨绝对路径重复构建 | `PASS`，kernel/image SHA-256 分别一致 |
 | 2026-07-31 | `20260731-1506-m0-build-foundation` | QEMU run/debug 入口 | `PASS`，均保持运行至测试超时 |
 | 2026-07-31 | `20260731-1535-push-m0-branch` | 推送远程 M0 分支 | `PASS`，本地与远程 ref 一致 |
+| 2026-08-03 | `20260803-1657-m1-stage1` | GCC/Clang `make verify` | `PASS`，512-byte stage1、`0xAA55`、`S2OK` 与镜像布局均通过 |
+| 2026-08-03 | `20260803-1657-m1-stage1` | GCC/Clang `make test-boot` | `PASS`，正常 `S1 -> S2`；损坏头 `S1 -> E2` 且不跳转 |
+| 2026-08-03 | `20260803-1657-m1-stage1` | GCC 独立目录重复构建 | `PASS`，boot/kernel/image 产物逐字节一致 |
