@@ -6,7 +6,11 @@
 
 > **当前状态**
 >
-> 项目目前处于规划与基础设施阶段：总体路线和多会话交接机制已经建立，M0 构建骨架尚未开始。现在还没有 bootloader、kernel、Makefile 或可启动镜像。准确进度请查看 [PROJECT_STATUS.md](PROJECT_STATUS.md)。
+> M1 stage1 已完成：项目能构建严格 512 字节的 BIOS boot sector，使用
+> INT 13h extensions 读取 stage2，并在 QEMU 中观察到 `S1 -> S2`。损坏
+> stage2 交接头时，stage1 会输出 `E2` 并拒绝跳转。higher-half kernel ELF
+> 已包含在镜像中，但要到 M2 才会被 stage2 加载和执行。准确进度请查看
+> [PROJECT_STATUS.md](PROJECT_STATUS.md)。
 
 ## 最终要实现什么
 
@@ -73,14 +77,16 @@ QEMU 不是内核的一部分：
 QEMU 提供虚拟硬件 -> bootloader 启动 -> kernel 管理硬件
 ```
 
-当前机器已经有一个可用的 QEMU 11.0.2 本地构建，但它不在 `PATH`：
+当前机器已经有一个可用的 QEMU 11.0.2 本地构建，但 `qemu-system-x86_64`
+不在 `PATH`：
 
 ```text
 /home/godot/ai_native/QEMU_NET/qemu-build/qemu-system-x86_64
-/home/godot/ai_native/QEMU_NET/qemu-build/qemu-img
+/usr/bin/qemu-img
 ```
 
-后续 Makefile 会支持通过 `QEMU` 和 `QEMU_IMG` 变量覆盖路径，而不是要求每台机器都使用上述绝对路径。
+Makefile 会先检查 `PATH`，再检查当前机器的本地 QEMU 路径，也支持通过
+`QEMU` 和 `QEMU_IMG` 变量显式覆盖。
 
 ## 技术选择
 
@@ -103,8 +109,8 @@ QEMU 提供虚拟硬件 -> bootloader 启动 -> kernel 管理硬件
 
 | 里程碑 | 内容 | 当前状态 |
 |---|---|---|
-| M0 | 工程骨架、工具检测、可重复构建 | 未开始 |
-| M1 | 512 字节 stage1 | 未开始 |
+| M0 | 工程骨架、工具检测、可重复构建 | 完成 |
+| M1 | 512 字节 stage1 | 完成 |
 | M2 | stage2、E820、ELF loader、long mode | 未开始 |
 | M3 | console、中断、PIC/PIT、键盘 | 未开始 |
 | M4 | PMM、VMM、最终页表、内核堆 | 未开始 |
@@ -119,21 +125,25 @@ QEMU 提供虚拟硬件 -> bootloader 启动 -> kernel 管理硬件
 
 ## 构建与运行
 
-当前尚未进入 M0，因此下面是计划中的最终使用方式，**现在还不能执行成功**：
+执行：
 
 ```sh
 make doctor
 make image
-make run
+make verify
+make test-boot
 ```
 
-预期含义：
+这些命令目前已经可用：
 
 - `make doctor`：检查编译器、binutils、QEMU 和可选 GDB。
-- `make image`：编译 bootloader、kernel 和用户程序，生成磁盘镜像。
-- `make run`：在 QEMU 中从磁盘镜像启动。
+- `make` / `make image`：编译 kernel ELF 并生成 `build/toy-linux.img`。
+- `make boot`：只构建 512-byte stage1 和 M1 stage2 占位程序。
+- `make verify`：检查 boot signature、stage2 交接头、ELF 和磁盘镜像布局。
+- `make test-boot`：用 QEMU 验证正常交接和损坏 stage2 的错误路径。
+- `make run`：运行 M1 镜像，串口应输出 `S1` 和 `S2`。
 - `make debug`：让 QEMU 暂停在启动位置并开放 GDB remote。
-- `make test`：通过串口运行启动与功能冒烟测试。
+- `make clean`：只删除 `build/`。
 
 已经确认可用的宿主工具：
 
@@ -145,7 +155,8 @@ ld
 QEMU 11.0.2（使用上面的本地路径）
 ```
 
-GDB 当前尚未在 `PATH` 中检测到。工具探测和跨机器配置将在 M0 实现。
+GDB 当前尚未在 `PATH` 中检测到，但它在 M1 是可选工具。构建参数、产物和镜像布局详见
+[docs/build.md](docs/build.md)，启动契约见 [docs/boot.md](docs/boot.md)。
 
 ## 当前目录导航
 
@@ -157,16 +168,31 @@ GDB 当前尚未在 `PATH` 中检测到。工具探测和跨机器配置将在 M
 ├── PROJECT_STATUS.md      # 当前已经实现和验证的事实
 ├── TASKS.md               # 任务状态与依赖
 ├── DECISIONS.md           # 架构决策索引
+├── Makefile               # 构建、验证和 QEMU 入口
+├── boot/
+│   ├── stage1.S           # 512-byte Legacy BIOS boot sector
+│   └── stage2.S           # M1 交接占位程序
+├── kernel/
+│   ├── arch/x86_64/       # 64 位内核入口
+│   ├── include/kernel/    # freestanding 公共类型
+│   ├── linker.ld          # higher-half ELF 布局
+│   └── main.c             # M0 内核骨架
 ├── docs/
 │   ├── claims/            # 活动/已关闭的写入范围 claim
 │   ├── decisions/         # 完整架构决策
-│   └── sessions/          # 每次写会话的操作和结果
+│   ├── sessions/          # 每次写会话的操作和结果
+│   ├── boot.md            # M1 启动流程、错误码和测试
+│   └── build.md           # 构建参数与镜像布局
 └── tools/
+    ├── doctor.sh          # 宿主工具检测
+    ├── mkimage.sh         # 确定性磁盘镜像生成
+    ├── verify-image.sh    # ELF 与镜像检查
+    ├── test-boot.sh       # QEMU 正常/损坏 stage2 测试
     ├── project-context.sh
     └── check-project-state.sh
 ```
 
-`boot/`、`kernel/`、`user/` 和 `tests/` 会在对应里程碑开始时逐步建立，不预先创建空目录。
+`user/` 和 `tests/` 会在对应里程碑开始时逐步建立，不预先创建空目录。
 
 ## 多会话开发
 
@@ -215,4 +241,3 @@ GDB 当前尚未在 `PATH` 中检测到。工具探测和跨机器配置将在 M
 - journaling 和崩溃恢复。
 
 这些内容可以作为核心目标完成后的扩展练习。
-
