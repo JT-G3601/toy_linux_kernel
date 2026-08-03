@@ -5,11 +5,12 @@
 ## 状态元数据
 
 - 最后更新：2026-08-03
-- 更新会话：`20260803-1657-m1-stage1`
+- 更新会话：`20260803-1721-publish-m1`
 - 当前阶段：M1 Legacy BIOS stage1 完成
 - 当前里程碑：M1 `done`；下一里程碑 M2
-- 项目版本：Git `agent/m0-build` 工作区，HEAD `e1da9c5`；M1 改动尚未提交
+- 项目版本：Git `agent/m0-build`，跟踪 `origin/agent/m0-build`；M1 实现提交 `7748e62`
 - GitHub：`https://github.com/JT-G3601/toy_linux_kernel`（public）
+- Draft PR：`https://github.com/JT-G3601/toy_linux_kernel/pull/1`（`agent/m0-build` -> `main`）
 
 ## 已完成
 
@@ -31,6 +32,8 @@
   - M1 最小 stage2 占位程序会输出 `S2` 后停机。
   - `make test-boot` 已验证正常 `S1 -> S2` 与损坏交接头时
     `S1 -> E2` 且不跳转的路径。
+  - linker 学习型注释与 M1 实现已分别提交并推送到远程分支，已创建
+    面向 `main` 的 draft PR #1。
 - 已建立项目原生的多会话交接协议：
   - 根目录 `AGENTS.md` 自动向新 Codex 会话提供协作规则。
   - `PROJECT_STATUS.md` 保存最新事实。
@@ -91,3 +94,5 @@
 | 2026-08-03 | `20260803-1657-m1-stage1` | GCC/Clang `make verify` | `PASS`，512-byte stage1、`0xAA55`、`S2OK` 与镜像布局均通过 |
 | 2026-08-03 | `20260803-1657-m1-stage1` | GCC/Clang `make test-boot` | `PASS`，正常 `S1 -> S2`；损坏头 `S1 -> E2` 且不跳转 |
 | 2026-08-03 | `20260803-1657-m1-stage1` | GCC 独立目录重复构建 | `PASS`，boot/kernel/image 产物逐字节一致 |
+| 2026-08-03 | `20260803-1721-publish-m1` | 推送 `agent/m0-build` | `PASS`，本地与远程 M1 ref 均为 `7748e62` |
+| 2026-08-03 | `20260803-1721-publish-m1` | Draft PR #1 | `PASS`，open/draft/mergeable，`agent/m0-build` -> `main` |
