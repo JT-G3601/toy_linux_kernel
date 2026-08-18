@@ -4,13 +4,13 @@
 
 ## 状态元数据
 
-- 最后更新：2026-08-04
-- 更新会话：`20260804-0029-kernel-boot-guide`
+- 最后更新：2026-08-18
+- 更新会话：`20260817-1500-publish-m2`
 - 当前阶段：M2 stage2、ELF loader 与 long mode 完成
 - 当前里程碑：M2 `done`；下一里程碑 M3
-- 项目版本：Git `agent/m0-build`，基线 `5780abb`；M2 改动位于当前工作区，尚未提交或推送
+- 项目版本：Git `agent/m2-long-mode`，跟踪 `origin/agent/m2-long-mode`；M2 实现提交 `2e960b3`
 - GitHub：`https://github.com/JT-G3601/toy_linux_kernel`（public）
-- Draft PR：`https://github.com/JT-G3601/toy_linux_kernel/pull/1`（`agent/m0-build` -> `main`）
+- Draft PR：`https://github.com/JT-G3601/toy_linux_kernel/pull/2`（`agent/m2-long-mode` -> `main`）
 
 ## 已完成
 
@@ -129,3 +129,6 @@
 | 2026-08-04 | `20260804-0011-qemu-marker-wait` | marker-driven `make test-boot` | `PASS`，四场景约 0.9 秒完成并主动回收 QEMU，无残留进程 |
 | 2026-08-04 | `20260804-0011-qemu-marker-wait` | `QEMU_TEST_TIMEOUT=0.5s` 参数校验 | `PASS`，拒绝非整数最大等待值并给出明确错误 |
 | 2026-08-04 | `20260804-0029-kernel-boot-guide` | 启动教程内部链接、Markdown fence 与源码常量核对 | `PASS`，GDT selector、16384 PTE/64 MiB 映射与当前实现一致 |
+| 2026-08-18 | `20260817-1500-publish-m2` | GCC/Clang clean `make image verify test-boot` | `PASS`，两种编译器的正常路径和三条负路径均通过 |
+| 2026-08-18 | `20260817-1500-publish-m2` | 推送 `agent/m2-long-mode` | `PASS`，本地与远程实现提交均为 `2e960b3` |
+| 2026-08-18 | `20260817-1500-publish-m2` | Draft PR #2 | `PASS`，open/draft/mergeable，`agent/m2-long-mode` -> `main` |
