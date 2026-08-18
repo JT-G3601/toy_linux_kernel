@@ -16,6 +16,7 @@
 | `TASK-PUBLISH-002` | `done` | 项目发布 | 推送 M0 功能分支 | `TASK-M0-001` | `20260731-1535-push-m0-branch` |
 | `TASK-PUBLISH-003` | `done` | 项目发布 | 提交并推送 M1 改动，创建 draft PR | `TASK-M1-001` | `20260803-1721-publish-m1` |
 | `TASK-PUBLISH-004` | `done` | 项目发布 | 提交并推送 M2、测试与配套教材改动 | `TASK-M2-001` | `20260817-1500-publish-m2` |
+| `TASK-PUBLISH-005` | `done` | 项目发布 | 提交并推送 M3/M4，创建 Draft PR | `TASK-M4-001` | `20260818-2314-publish-m3-m4` |
 | `TASK-M0-001` | `done` | M0 | Makefile、链接骨架、工具检测、镜像与运行入口 | `TASK-INFRA-001` | `20260731-1506-m0-build-foundation` |
 | `TASK-M1-001` | `done` | M1 | 512 字节 stage1 bootloader | `TASK-M0-001` | `20260803-1657-m1-stage1` |
 | `TASK-M2-001` | `done` | M2 | stage2、E820、ELF64 loader、long mode | `TASK-M1-001` | `20260803-1911-m2-long-mode` |

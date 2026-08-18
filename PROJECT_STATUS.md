@@ -8,9 +8,9 @@
 - 更新会话：`20260818-2231-m4-memory`
 - 当前阶段：M4 物理与虚拟内存管理完成
 - 当前里程碑：M4 `done`；下一里程碑 M5
-- 项目版本：Git `agent/m3-interrupts`，基线 `fd657ea`；M3-M4 改动位于当前工作区，尚未提交或推送
+- 项目版本：Git `agent/m3-interrupts`，M3/M4 实现提交 `7bfc5b1` 已推送
 - GitHub：`https://github.com/JT-G3601/toy_linux_kernel`（public）
-- Draft PR：`https://github.com/JT-G3601/toy_linux_kernel/pull/2`（`agent/m2-long-mode` -> `main`）
+- Draft PR：`https://github.com/JT-G3601/toy_linux_kernel/pull/3`（`agent/m3-interrupts` -> `main`；因 PR #2 未合并，当前覆盖 M2-M4）
 
 ## 已完成
 
@@ -171,3 +171,4 @@ round-robin。进入抢占前先根据 ADR-0007 为 PMM/VMM/heap 定义关中断
 | 2026-08-18 | `20260818-2141-m3-interrupts` | M3 教材链接、fence 与源码常量核对 | `PASS`，selector/vector/frame/PIT/CR2 实验地址一致 |
 | 2026-08-18 | `20260818-2231-m4-memory` | GCC clean `make test-boot` | `PASS`，M4 正常/三权限 fault、M3 divide/IRQ 与 M2 三负路径共八场景通过 |
 | 2026-08-18 | `20260818-2231-m4-memory` | Clang + GNU ld clean `make test-boot` | `PASS`，同一八场景通过；环境未安装 LLD |
+| 2026-08-18 | `20260818-2314-publish-m3-m4` | 推送 `agent/m3-interrupts` 与创建 Draft PR #3 | `PASS`，实现提交 `7bfc5b1`，PR open/draft/mergeable |
