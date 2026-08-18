@@ -1,4 +1,4 @@
-# M2 Legacy BIOS 启动链
+# M2-M4 Legacy BIOS 启动、页表交接与中断链
 
 ## 启动过程
 
@@ -32,8 +32,14 @@ stage2（64-bit long mode）
   v
 kernel _start -> kernel_main
   |-- 输出 K2:LONG MODE OK
-  |-- 校验并打印 boot_info、内核范围和 E820 map
-  `-- 输出 K2:HALT 后停机
+  |-- 校验、打印并复制 boot_info/E820
+  |-- runtime/console -> kernel GDT/TSS -> 256-entry IDT
+  |-- E820 -> bitmap PMM，保留低 1 MiB 与 kernel
+  |-- 建立 HHDM/section 权限/VGA 最小低映射，切换最终 CR3
+  |-- 初始化 boundary-tag heap 并完成内存自测
+  |-- remap PIC，配置 100 Hz PIT 和 PS/2 keyboard
+  |-- STI 后以 HLT 等待 IRQ
+  `-- timer 前进且收到字符后输出 K4:HALT / K3:HALT
 ```
 
 ## 磁盘与早期物理内存
@@ -66,7 +72,22 @@ LBA 128...  kernel.elf       ------> 0x00020000..0x0005ffff（暂存）
 
 identity map 让切换前后的 stage2、栈、boot info 和页表继续可访问。higher-half
 映射让链接到 `0xffffffff80000000` 的内核代码从物理 1 MiB 开始执行。这只是
-启动页表；M4 会建立最终映射并收紧权限。
+启动页表；M4 在复制低地址 boot data 后替换它。
+
+## M4 最终页表
+
+```text
+virtual 0x00000000000b8000 -> physical 0x000b8000       VGA，RW-/NX
+virtual 0xffff800000000000 -> physical 0x00000000       前 1 GiB HHDM，NX
+virtual 0xffffc00000000000 -> dynamic test frame        权限实验
+virtual 0xffffc10000000000 -> on-demand heap frames     最大 16 MiB，RW-/NX
+virtual 0xffffffff80000000 -> kernel physical 0x100000  text R-X / rodata R-- / data+BSS RW-
+```
+
+除 VGA 一页外，M2 的低 1 GiB identity map 不进入最终 PML4。HHDM 普通区使用
+2 MiB huge pages；与 kernel physical range 重叠的 chunk 拆成 4 KiB，以保证
+text/rodata 的直映别名也不可写。内核启用 `EFER.NXE`、`CR0.WP`，PTE 改变后执行
+`invlpg`。完整契约见 [ADR-0007](decisions/0007-m4-memory-architecture.md)。
 
 ## 可观察输出
 
@@ -81,7 +102,18 @@ identity map 让切换前后的 stage2、栈、boot info 和页表继续可访�
 | `M2:MEMORY ERROR` | E820 可用内存不能覆盖内核物理范围 |
 | `M2:ELF OK` | ELF 已验证、装载，准备开启 paging |
 | `K2:LONG MODE OK` | 已在 64 位 higher-half 内核运行 |
-| `K2:HALT` | boot info/E820 输出完成，内核按 M2 设计停机 |
+| `K3:GDT TSS OK` / `K3:IDT OK` | 内核已接管 descriptor tables |
+| `K3:PIC OK` / `K3:PIT OK` | IRQ remap 完成，PIT 目标为 100 Hz |
+| `K3:READY` | IDT 与 IRQ handler 已安装，`sti` 已执行 |
+| `K3:TIMER OK` | 两次采样证明 tick counter 持续前进 |
+| `K3:KEY char=...` | PS/2 IRQ1 scan code 已转换并回显 |
+| `K3:EXCEPTION ...` | fatal exception 的 vector/error code/寄存器转储开始 |
+| `K3:DIVIDE ERROR OK` / `K3:PAGE FAULT OK` | 受控异常场景到达预期 handler |
+| `K4:PMM READY` / `K4:VMM READY` / `K4:HEAP READY` | M4 三层内存管理已初始化 |
+| `K4:VMM PERMS OK` | section 权限、旧低映射移除和 VGA 保留已核对 |
+| `K4:PMM STRESS OK` / `K4:VMM MAP/PROTECT OK` / `K4:HEAP STRESS OK` | 页与跨页对象自测通过 |
+| `K4:* FAULT OK` | unmapped/read-only/NX 的 CR2 与 error code 符合预期 |
+| `K4:HALT` / `K3:HALT` | 正常 M4 内存与 M3 timer/keyboard 验收完成 |
 
 ## 构建与测试
 
@@ -92,5 +124,8 @@ make test-boot
 make run
 ```
 
-`make test-boot` 自动验证正常启动、损坏 `S2OK`、损坏 ELF magic 和 1 MiB
-低内存四种路径。负路径只修改临时镜像，不修改 `build/toy-linux.img`。
+`make test-boot` 自动验证 M4 PMM/VMM/heap、M3 timer/keyboard、真实 divide、
+unmapped/read-only/NX page fault，以及损坏 `S2OK`、损坏 ELF magic 和 1 MiB
+低内存三条 M2 回归路径。负路径和
+测试模式只使用独立临时镜像，不修改默认 `build/toy-linux.img`。中断 frame、
+selector 与 vector 契约见 [ADR-0006](decisions/0006-m3-interrupt-architecture.md)。

@@ -5,10 +5,10 @@
 ## 状态元数据
 
 - 最后更新：2026-08-18
-- 更新会话：`20260817-1500-publish-m2`
-- 当前阶段：M2 stage2、ELF loader 与 long mode 完成
-- 当前里程碑：M2 `done`；下一里程碑 M3
-- 项目版本：Git `agent/m2-long-mode`，跟踪 `origin/agent/m2-long-mode`；M2 实现提交 `2e960b3`
+- 更新会话：`20260818-2231-m4-memory`
+- 当前阶段：M4 物理与虚拟内存管理完成
+- 当前里程碑：M4 `done`；下一里程碑 M5
+- 项目版本：Git `agent/m3-interrupts`，基线 `fd657ea`；M3-M4 改动位于当前工作区，尚未提交或推送
 - GitHub：`https://github.com/JT-G3601/toy_linux_kernel`（public）
 - Draft PR：`https://github.com/JT-G3601/toy_linux_kernel/pull/2`（`agent/m2-long-mode` -> `main`）
 
@@ -45,6 +45,32 @@
   - higher-half 内核确认 long mode，校验 boot info，打印 boot drive、内核范围和
     E820 map，最后输出 `K2:HALT`。
   - `make test-boot` 验证正常启动、损坏 stage2、非法 ELF 和 1 MiB 低内存路径。
+- 已完成 M3 内核基础设施与中断：
+  - 实现 `memcpy/memset/memmove/strlen`、简化 formatter、`panic` 以及同时输出
+    COM1/VGA text mode 的统一 console。
+  - 建立 40-byte 内核 GDT、64-bit TSS、double-fault IST1 栈和 256-entry IDT；
+    汇编入口统一 CPU error code 差异并向 C 传递 160-byte interrupt frame。
+  - fatal exception 打印 vector/name/error code、`RIP/CS/RFLAGS`、`RAX..R15`；
+    page fault 额外打印 `CR2`，随后关中断停机。
+  - 8259 PIC remap 到 vector 32..47；PIT IRQ0 配置为 100 Hz；PS/2 IRQ1 支持
+    set-1 基本 ASCII 与 Shift，并通过统一 console 回显字符。
+  - `make test-boot` 构建正常/divide/page-fault 三种镜像，验证 tick 前进、QEMU
+    HMP 注入 `a` 键的真实 IRQ、`#DE/#PF` 寄存器帧，并回归 M2 三条失败路径。
+  - 已接受 ADR-0006，并完成 `verified` M3 教材章节。
+- 已完成 M4 物理与虚拟内存管理：
+  - 在删除 M2 低映射前复制 `boot_info v1` 与 E820 entries；bitmap PMM 只管理
+    type 1 且低于 1 GiB 的 4 KiB frames，保留低 1 MiB 与 kernel physical range。
+  - PMM 分开记录 E820 管理范围、占用状态和 allocator ownership，提供统计，并对
+    未对齐、越界、未管理、保留页和重复释放执行明确 panic。
+  - 最终页表提供 `0xffff800000000000` HHDM、R-X/R--/RW- kernel sections 和
+    唯一的 VGA 低地址页；启用 NXE、CR0.WP，并提供 map/unmap/protect/translate 与 TLB flush。
+  - 实现 `0xffffc10000000000` 起、最大 16 MiB 的按页扩展 boundary-tag first-fit
+    heap，支持分裂、前后合并、跨页对象与边界损坏检测。
+  - 正常启动验证 64 页 PMM 压力后 free count 恢复、最终 section/低映射权限、
+    VMM map/protect/unmap 和 7000-byte 跨页 heap 复用。
+  - `make test-boot` 构建五种 kernel images，共验证八个 QEMU 场景；unmapped、
+    read-only、NX 的真实 `#PF` error code 分别为 `0x0/0x3/0x11`，M2-M3 回归通过。
+  - 已接受 ADR-0007，并完成 `verified` M4 教材章节。
 - 已建立里程碑教科书文档规范：
   - M0、M1、M2 已分别配套背景、机器状态、实现方法、示意图、验证、排错、练习与
     拓展阅读章节。
@@ -69,9 +95,9 @@
 
 ## 尚未实现
 
-- console、中断、内存管理、调度等实际内核子系统尚未实现。
+- 内核线程和抢占式调度尚未实现。
 - 用户态、系统调用、VFS 和持久化文件系统尚未实现。
-- 已有启动至早期内核并打印 boot info/E820 的测试，但还没有 M3 之后的内核子系统测试。
+- 尚无独立用户地址空间、页表中间层回收或并发内存分配测试。
 
 ## 已验证的开发环境
 
@@ -90,15 +116,23 @@
 - `qemu-system-x86_64` 是另一个项目的本地 debug build，不在 `PATH`；Makefile
   可以自动探测该路径，也允许用 `QEMU` 覆盖。
 - stage2 的 `S2OK` 是交接头校验，不是整个 stage2 的完整性 checksum。
-- M2 kernel ELF 暂存区限制文件大小为 256 KiB，higher-half 临时映射限制加载物理
-  范围低于 65 MiB；M4 最终内存管理会替换临时页表。
-- M2 临时页表把启动映射统一标记为 writable，尚未按 ELF flags 收紧权限。
+- M2 kernel ELF 暂存区仍限制文件大小为 256 KiB，loader 仍要求物理加载范围低于
+  65 MiB；M4 最终页表已替换其临时运行时映射。
+- M4 PMM/HHDM 只覆盖前 1 GiB；静态三 bitmap 约占 96 KiB，直映包含 holes/MMIO，
+  但 PMM 只分配 E820 type 1 RAM。
+- VMM 尚不回收空的中间页表，heap 不把尾部页退还 PMM；PMM/VMM/heap 都尚无锁。
+- 最终低地址只保留 VGA `0xb8000` 一页 identity mapping；完全删除需先让 console
+  改用 HHDM。
+- M3 仍使用 legacy 8259/PIT/PS2；只有单核 CPL0 中断入口，没有 APIC、SMP、ring 3
+  stack transition 或 `swapgs`。
+- keyboard 只支持 set-1 基本 ASCII/Shift；console 尚无并发锁，fatal exception
+  只诊断并停机，不尝试恢复。
 - QEMU GDB server 已验证，但本机还没有 GDB 客户端。
 
 ## 下一步
 
-执行 `TASK-M3-001`：补齐 console、内核 GDT/IDT/TSS、异常入口、PIC/PIT 和键盘。
-继续遵守 `ADR-0003`、`ADR-0004` 和 `ADR-0005`。
+执行 `TASK-M5-001`：实现内核线程、上下文切换、sleep/wake 和 PIT 驱动的抢占式
+round-robin。进入抢占前先根据 ADR-0007 为 PMM/VMM/heap 定义关中断或锁保护边界。
 
 ## 最近验证
 
@@ -132,3 +166,8 @@
 | 2026-08-18 | `20260817-1500-publish-m2` | GCC/Clang clean `make image verify test-boot` | `PASS`，两种编译器的正常路径和三条负路径均通过 |
 | 2026-08-18 | `20260817-1500-publish-m2` | 推送 `agent/m2-long-mode` | `PASS`，本地与远程实现提交均为 `2e960b3` |
 | 2026-08-18 | `20260817-1500-publish-m2` | Draft PR #2 | `PASS`，open/draft/mergeable，`agent/m2-long-mode` -> `main` |
+| 2026-08-18 | `20260818-2141-m3-interrupts` | GCC/Clang clean `make image verify` | `PASS`，ELF 分别为 54,880/51,088 bytes，镜像布局通过 |
+| 2026-08-18 | `20260818-2141-m3-interrupts` | GCC/Clang clean `make test-boot` | `PASS`，timer/keyboard、`#DE/#PF` 与 M2 三条负路径均通过 |
+| 2026-08-18 | `20260818-2141-m3-interrupts` | M3 教材链接、fence 与源码常量核对 | `PASS`，selector/vector/frame/PIT/CR2 实验地址一致 |
+| 2026-08-18 | `20260818-2231-m4-memory` | GCC clean `make test-boot` | `PASS`，M4 正常/三权限 fault、M3 divide/IRQ 与 M2 三负路径共八场景通过 |
+| 2026-08-18 | `20260818-2231-m4-memory` | Clang + GNU ld clean `make test-boot` | `PASS`，同一八场景通过；环境未安装 LLD |

@@ -13,8 +13,8 @@
 | [M0：从源代码到内核镜像](m0-build-foundation.md) | freestanding、ELF、链接脚本、可重复构建 | 已完成 |
 | [M1：BIOS 如何找到 Stage2](m1-bios-stage1.md) | real mode、段寄存器、磁盘读取、启动扇区 | 已完成 |
 | [M2：从 ELF Loader 到 Long Mode](m2-loader-long-mode.md) | A20、E820、ELF、GDT、四级页表、boot info | 已完成 |
-| M3 | console、中断、PIC/PIT、键盘 | 实现时编写 |
-| M4 | 物理/虚拟内存与内核堆 | 实现时编写 |
+| [M3：从串口打印到可诊断的中断内核](m3-kernel-infrastructure.md) | console、GDT/TSS、IDT、异常、PIC/PIT、键盘 | 已完成 |
+| [M4：从 E820 到可验证的内核内存管理](m4-memory-management.md) | bitmap PMM、最终页表、HHDM、权限、boundary-tag heap | 已完成 |
 | M5 | 内核线程与调度 | 实现时编写 |
 | M6 | 用户态、进程与系统调用 | 实现时编写 |
 | M7 | VFS 与 ramfs | 实现时编写 |

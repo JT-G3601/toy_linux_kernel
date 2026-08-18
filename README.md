@@ -6,9 +6,9 @@
 
 > **当前状态**
 >
-> M2 已完成：stage2 会取得 E820 内存图、验证并装载 ELF64 `PT_LOAD`、建立
-> 临时四级页表并进入 long mode。higher-half 内核已在 QEMU 中运行，能接收
-> `boot_info v1` 并打印 E820；损坏 ELF 和内存不足路径也有自动测试。准确进度请查看
+> M4 已完成：内核已用 E820 建立 bitmap PMM，切换到带 HHDM 与 section 权限的
+> 最终四级页表，并提供 boundary-tag heap。QEMU 自动验证 64 页压力、跨页堆复用、
+> unmapped/read-only/NX fault，以及 M2-M3 全部回归路径。准确进度请查看
 > [PROJECT_STATUS.md](PROJECT_STATUS.md)。
 
 ## 最终要实现什么
@@ -111,8 +111,8 @@ Makefile 会先检查 `PATH`，再检查当前机器的本地 QEMU 路径，也�
 | M0 | 工程骨架、工具检测、可重复构建 | 完成 |
 | M1 | 512 字节 stage1 | 完成 |
 | M2 | stage2、E820、ELF loader、long mode | 完成 |
-| M3 | console、中断、PIC/PIT、键盘 | 未开始 |
-| M4 | PMM、VMM、最终页表、内核堆 | 未开始 |
+| M3 | console、中断、PIC/PIT、键盘 | 完成 |
+| M4 | PMM、VMM、最终页表、内核堆 | 完成 |
 | M5 | 内核线程和抢占式调度 | 未开始 |
 | M6 | Ring 3、进程和系统调用 | 未开始 |
 | M7 | VFS 和 ramfs | 未开始 |
@@ -130,9 +130,11 @@ Makefile 会先检查 `PATH`，再检查当前机器的本地 QEMU 路径，也�
 - [M0：从源代码到内核镜像](docs/textbook/m0-build-foundation.md)
 - [M1：BIOS 如何找到 Stage2](docs/textbook/m1-bios-stage1.md)
 - [M2：从 ELF Loader 到 Long Mode](docs/textbook/m2-loader-long-mode.md)
+- [M3：从串口打印到可诊断的中断内核](docs/textbook/m3-kernel-infrastructure.md)
+- [M4：从 E820 到可验证的内核内存管理](docs/textbook/m4-memory-management.md)
 
 章节包含机器初始状态、实现方法、流程/内存示意图、验证实验、常见误解、练习和
-拓展阅读。从 M3 开始，教材达到 `verified` 是里程碑进入 `done` 的必要条件。
+拓展阅读。M0-M4 教材均已达到 `verified`；后续教材也是里程碑进入 `done` 的必要条件。
 索引与写作规范见 [docs/textbook/README.md](docs/textbook/README.md)。
 
 ## 构建与运行
@@ -152,9 +154,10 @@ make test-boot
 - `make` / `make image`：编译 kernel ELF 并生成 `build/toy-linux.img`。
 - `make boot`：只构建 512-byte stage1 和 M2 ELF/long-mode loader。
 - `make verify`：检查 boot signature、stage2 交接头、ELF 和磁盘镜像布局。
-- `make test-boot`：用串口终止标记验证正常、损坏 stage2、非法 ELF 和低内存路径，
-  标记出现后主动回收 QEMU；可用 `QEMU_TEST_TIMEOUT=60s` 调整最大等待时间。
-- `make run`：启动至 M2 higher-half 内核并打印 boot info/E820。
+- `make test-boot`：构建正常、除零、unmapped、read-only、NX 五种 kernel 镜像，
+  验证 PMM/VMM/heap、PIT/键盘、exception frame 及 M2 三条失败路径；可用
+  `QEMU_TEST_TIMEOUT=60s` 调整最大等待时间。
+- `make run`：启动 M4 higher-half 内核，完成内存自测后等待 timer tick 和键盘输入。
 - `make debug`：让 QEMU 暂停在启动位置并开放 GDB remote。
 - `make clean`：只删除 `build/`。
 
@@ -186,16 +189,19 @@ GDB 当前尚未在 `PATH` 中检测到，但它仍是可选工具。构建参�
 │   ├── stage1.S           # 512-byte Legacy BIOS boot sector
 │   └── stage2.S           # E820、ELF loader、页表与 long-mode 切换
 ├── kernel/
-│   ├── arch/x86_64/       # 64 位内核入口
-│   ├── include/kernel/    # freestanding 公共类型
+│   ├── arch/x86_64/       # 入口、GDT/TSS、IDT、PIC/PIT、PS/2
+│   ├── include/kernel/    # freestanding 类型与内核接口
+│   ├── lib/               # memcpy/memset/memmove/strlen
+│   ├── mm/                # bitmap PMM、最终页表/VMM、boundary-tag heap
+│   ├── console.c          # COM1 + VGA 与格式化输出/panic
 │   ├── linker.ld          # higher-half ELF 布局
-│   └── main.c             # M2 早期串口与 boot info/E820 输出
+│   └── main.c             # M4 初始化、自测与受控异常场景
 ├── docs/
 │   ├── claims/            # 活动/已关闭的写入范围 claim
 │   ├── decisions/         # 完整架构决策
 │   ├── sessions/          # 每次写会话的操作和结果
 │   ├── textbook/          # M0-M10 教科书式实现章节
-│   ├── boot.md            # M2 启动流程、内存布局、错误码和测试
+│   ├── boot.md            # M2-M4 启动、页表交接、中断与测试
 │   └── build.md           # 构建参数与镜像布局
 └── tools/
     ├── doctor.sh          # 宿主工具检测

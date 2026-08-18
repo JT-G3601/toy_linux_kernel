@@ -1,4 +1,4 @@
-# M0-M2 构建与镜像
+# M0-M4 构建与镜像
 
 ## 构建链
 
@@ -33,7 +33,8 @@ make clean
 
 `make` 等价于 `make image`，产物只写入带安全标记的 `build/`。可以覆盖
 `CC`、`LD`、`READELF`、`BUILD_DIR`、`QEMU`、`QEMU_MEMORY` 和
-`QEMU_GDB_PORT`，例如 `make CC=clang image`。
+`QEMU_GDB_PORT`，例如 `make CC=clang image`。`KERNEL_TEST_MODE=1/2/3/4` 只用于
+受控的 divide/unmapped/read-only/NX 测试镜像；日常镜像保持默认 0。
 
 ## 地址与镜像布局
 
@@ -63,6 +64,7 @@ build/
 ├── kernel/kernel.elf
 ├── kernel/kernel.map
 ├── kernel/.../*.o
+├── m4-tests/{divide,unmapped,read-only,nx}/...  # 独立测试镜像
 └── toy-linux.img
 ```
 
@@ -72,10 +74,15 @@ higher-half entry、1 MiB LMA、无 dynamic loader/未定义符号/W+X segment�
 
 `make test-boot` 在 QEMU 验证：
 
-1. 正常路径进入 long mode，打印 E820，最后输出 `K2:HALT`。
-2. 损坏 stage2 头时输出 `E2`，不交接。
-3. 损坏 ELF magic 时输出 `M2:ELF ERROR`，不进入内核。
-4. 仅提供 1 MiB RAM 时输出 `M2:MEMORY ERROR`，不进入内核。
+1. 正常路径完成 PMM 64 页压力、VMM map/unmap、跨页 heap 复用，再证明 tick
+   递增，通过 QEMU HMP 注入 `a` 键并由真实 PS/2 IRQ 回显，输出 `K4:HALT`。
+2. 独立 `KERNEL_TEST_MODE=1` 镜像执行真实 `divq / 0`，打印 vector 0 和寄存器帧。
+3. mode 2 读取 unmapped page，验证 `#PF error=0x0`。
+4. mode 3 在 `CR0.WP=1` 下写 read-only page，验证 `#PF error=0x3`。
+5. mode 4 从 NX page 取指，验证 `#PF error=0x11`。
+6. 损坏 stage2 头时输出 `E2`，不交接。
+7. 损坏 ELF magic 时输出 `M2:ELF ERROR`，不进入内核。
+8. 仅提供 1 MiB RAM 时输出 `M2:MEMORY ERROR`，不进入内核。
 
 测试把串口写入临时文件，并持续等待每个场景自己的终止标记。标记出现后立即
 终止并回收 QEMU；默认 30 秒只是最大启动期限，可以针对环境调整：
@@ -84,14 +91,19 @@ higher-half entry、1 MiB LMA、无 dynamic loader/未定义符号/W+X segment�
 make QEMU_TEST_TIMEOUT=60s test-boot
 ```
 
-当前 M2 内核输出 `K2:HALT` 后执行 `HLT`，不会请求 QEMU 进程退出。因此测试
-harness 在观察到终止标记后主动发送 TERM 并 `wait` 回收进程。成功测试不需要
-等待到最大期限。若标记缺失，脚本会打印最大等待时间和串口/QEMU captured output。
+当前 M4 正常内核输出 `K4:HALT`/`K3:HALT` 后执行 `HLT`；异常镜像在诊断后
+panic/halt，均
+不会请求 QEMU 进程退出。因此测试 harness 在观察到场景 marker 后主动发送 TERM
+并 `wait` 回收进程。键盘注入通过 `-monitor stdio` 的私有 FIFO 写入 HMP
+`sendkey a`，不需要图形窗口或 host socket。若 marker 缺失，脚本会打印串口与
+QEMU captured output。
 
 ## QEMU 与 GDB
 
 `make run` 使用无图形 QEMU 和 COM1 标准输出，正常启动应依次看到 `S1`、
-`S2`、M2 loader 状态、`K2:LONG MODE OK`、E820 map 和 `K2:HALT`。
+`S2`、M2 loader 状态、`K2:LONG MODE OK`、M4 memory marker 与 M3 IRQ/timer marker。
+`make run` 的 headless 配置不注入键盘，因此会停在等待输入的 `HLT` loop；使用
+`make test-boot` 观察 HMP 自动注入按键后的完整路径。
 
 `make debug` 在首条指令前暂停，并默认在 TCP 1234 开启 GDB server：
 

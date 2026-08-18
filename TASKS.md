@@ -19,8 +19,8 @@
 | `TASK-M0-001` | `done` | M0 | Makefile、链接骨架、工具检测、镜像与运行入口 | `TASK-INFRA-001` | `20260731-1506-m0-build-foundation` |
 | `TASK-M1-001` | `done` | M1 | 512 字节 stage1 bootloader | `TASK-M0-001` | `20260803-1657-m1-stage1` |
 | `TASK-M2-001` | `done` | M2 | stage2、E820、ELF64 loader、long mode | `TASK-M1-001` | `20260803-1911-m2-long-mode` |
-| `TASK-M3-001` | `todo` | M3 | console、GDT/IDT/TSS、异常、PIC/PIT、键盘 | `TASK-M2-001` | - |
-| `TASK-M4-001` | `todo` | M4 | PMM、VMM、最终页表与内核堆 | `TASK-M3-001` | - |
+| `TASK-M3-001` | `done` | M3 | console、GDT/IDT/TSS、异常、PIC/PIT、键盘 | `TASK-M2-001` | `20260818-2141-m3-interrupts` |
+| `TASK-M4-001` | `done` | M4 | PMM、VMM、最终页表与内核堆 | `TASK-M3-001` | `20260818-2231-m4-memory` |
 | `TASK-M5-001` | `todo` | M5 | 内核线程与抢占式调度 | `TASK-M4-001` | - |
 | `TASK-M6-001` | `todo` | M6 | Ring 3、进程、ELF 用户程序与系统调用 | `TASK-M5-001` | - |
 | `TASK-M7-001` | `todo` | M7 | VFS 与 ramfs | `TASK-M6-001` | - |

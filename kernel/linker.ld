@@ -47,8 +47,10 @@ SECTIONS
      */
     .text : AT(KERNEL_LMA)
     {
+        __text_start = .;
         KEEP(*(.text.boot))
         *(.text .text.*)
+        __text_end = .;
     } :text
 
     /* 每类内容从 4 KiB 页边界开始，便于页表设置不同权限。 */
@@ -62,9 +64,11 @@ SECTIONS
      */
     .rodata : AT(KERNEL_LMA + (ADDR(.rodata) - KERNEL_VMA))
     {
+        __rodata_start = .;
         /* 保留项目的内核身份字符串，再收集其他只读常量。 */
         KEEP(*(.rodata.kernel_identity))
         *(.rodata .rodata.*)
+        __rodata_end = .;
     } :rodata
 
     . = ALIGN(PAGE_SIZE);
@@ -72,7 +76,9 @@ SECTIONS
     /* 收集已初始化的可写全局/静态数据，放入 R|W segment。 */
     .data : AT(KERNEL_LMA + (ADDR(.data) - KERNEL_VMA))
     {
+        __data_start = .;
         *(.data .data.*)
+        __data_end = .;
     } :data
 
     . = ALIGN(PAGE_SIZE);
@@ -84,6 +90,7 @@ SECTIONS
      */
     .bss (NOLOAD) : AT(KERNEL_LMA + (ADDR(.bss) - KERNEL_VMA))
     {
+        __bss_section_start = .;
         __bss_start = .;
         /* 先放 entry.S 中的 16 KiB bootstrap stack。 */
         *(.bss.stack)
@@ -91,6 +98,7 @@ SECTIONS
         /* COMMON 兼容工具链可能产生的旧式未初始化公共符号。 */
         *(COMMON)
         __bss_end = .;
+        __bss_section_end = .;
     } :data
 
     . = ALIGN(PAGE_SIZE);
