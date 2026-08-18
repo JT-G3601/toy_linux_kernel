@@ -8,3 +8,6 @@
 | `ADR-0002` | accepted | 使用项目内权威状态、独立会话日志和 scope claim 支持多会话 | `docs/decisions/0002-session-continuity.md` |
 | `ADR-0003` | accepted | 固定早期 kernel ELF 的磁盘位置、LMA 与 higher-half VMA | `docs/decisions/0003-early-kernel-image-layout.md` |
 | `ADR-0004` | accepted | 固定 stage1 读取范围、stage2 加载地址与交接头 | `docs/decisions/0004-stage1-stage2-contract.md` |
+| `ADR-0005` | accepted | 固定 M2 loader 低内存布局、临时映射与 `boot_info v1` | `docs/decisions/0005-m2-loader-memory-and-boot-info.md` |
+| `ADR-0006` | accepted | 固定 M3 内核 GDT/TSS、IDT vector 与 interrupt-frame 契约 | `docs/decisions/0006-m3-interrupt-architecture.md` |
+| `ADR-0007` | accepted | 固定 M4 PMM 上限、物理直映、最终页表权限与 boundary-tag heap | `docs/decisions/0007-m4-memory-architecture.md` |

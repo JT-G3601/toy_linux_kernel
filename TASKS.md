@@ -8,14 +8,20 @@
 | `TASK-PLAN-001` | `done` | 规划 | 编写总体实现计划 | 无 | `20260731-0000-initial-plan` |
 | `TASK-INFRA-001` | `done` | 项目基础设施 | 建立多会话状态、claim、日志和检查协议 | `TASK-PLAN-001` | `20260731-0001-project-session-protocol` |
 | `TASK-DOC-001` | `done` | 项目文档 | 编写根目录 README | `TASK-INFRA-001` | `20260731-1435-project-readme` |
+| `TASK-DOC-002` | `done` | 项目文档 | 建立里程碑教科书规范、补齐 M0-M2 章节并核对图文与实现 | `TASK-M2-001` | `20260803-2311-textbook-docs` |
+| `TASK-DOC-003` | `done` | 项目文档 | 编写 x86_64 内核启动与 GDT 深度教程 | `TASK-M2-001` | `20260804-0029-kernel-boot-guide` |
+| `TASK-TEST-001` | `done` | 测试基础设施 | QEMU 启动超时可配置并改善失败诊断 | `TASK-M2-001` | `20260804-0001-qemu-test-timeout` |
+| `TASK-TEST-002` | `done` | 测试基础设施 | 按串口终止标记完成并回收 QEMU 测试 | `TASK-TEST-001` | `20260804-0011-qemu-marker-wait` |
 | `TASK-PUBLISH-001` | `done` | 项目发布 | 初始化 Git 并发布公开 GitHub 仓库 | `TASK-DOC-001` | `20260731-1451-github-initial-publish` |
 | `TASK-PUBLISH-002` | `done` | 项目发布 | 推送 M0 功能分支 | `TASK-M0-001` | `20260731-1535-push-m0-branch` |
 | `TASK-PUBLISH-003` | `done` | 项目发布 | 提交并推送 M1 改动，创建 draft PR | `TASK-M1-001` | `20260803-1721-publish-m1` |
+| `TASK-PUBLISH-004` | `done` | 项目发布 | 提交并推送 M2、测试与配套教材改动 | `TASK-M2-001` | `20260817-1500-publish-m2` |
+| `TASK-PUBLISH-005` | `done` | 项目发布 | 提交并推送 M3/M4，创建 Draft PR | `TASK-M4-001` | `20260818-2314-publish-m3-m4` |
 | `TASK-M0-001` | `done` | M0 | Makefile、链接骨架、工具检测、镜像与运行入口 | `TASK-INFRA-001` | `20260731-1506-m0-build-foundation` |
 | `TASK-M1-001` | `done` | M1 | 512 字节 stage1 bootloader | `TASK-M0-001` | `20260803-1657-m1-stage1` |
-| `TASK-M2-001` | `todo` | M2 | stage2、E820、ELF64 loader、long mode | `TASK-M1-001` | - |
-| `TASK-M3-001` | `todo` | M3 | console、GDT/IDT/TSS、异常、PIC/PIT、键盘 | `TASK-M2-001` | - |
-| `TASK-M4-001` | `todo` | M4 | PMM、VMM、最终页表与内核堆 | `TASK-M3-001` | - |
+| `TASK-M2-001` | `done` | M2 | stage2、E820、ELF64 loader、long mode | `TASK-M1-001` | `20260803-1911-m2-long-mode` |
+| `TASK-M3-001` | `done` | M3 | console、GDT/IDT/TSS、异常、PIC/PIT、键盘 | `TASK-M2-001` | `20260818-2141-m3-interrupts` |
+| `TASK-M4-001` | `done` | M4 | PMM、VMM、最终页表与内核堆 | `TASK-M3-001` | `20260818-2231-m4-memory` |
 | `TASK-M5-001` | `todo` | M5 | 内核线程与抢占式调度 | `TASK-M4-001` | - |
 | `TASK-M6-001` | `todo` | M6 | Ring 3、进程、ELF 用户程序与系统调用 | `TASK-M5-001` | - |
 | `TASK-M7-001` | `todo` | M7 | VFS 与 ramfs | `TASK-M6-001` | - |

@@ -14,9 +14,12 @@ IMAGE := $(BUILD_DIR)/toy-linux.img
 IMAGE_SIZE := 16777216
 KERNEL_DISK_OFFSET := 65536
 STAGE1_LOAD_ADDR := 0x7c00
-STAGE2_LINK_ADDR := 0x0000
+STAGE2_LINK_ADDR := 0x8000
+KERNEL_STAGING_SIZE := 262144
 QEMU_MEMORY ?= 128M
 QEMU_GDB_PORT ?= 1234
+QEMU_TEST_TIMEOUT ?= 30s
+KERNEL_TEST_MODE ?= 0
 
 ifeq ($(origin CC),default)
 CC := gcc
@@ -33,7 +36,7 @@ QEMU ?= $(shell command -v qemu-system-x86_64 2>/dev/null || { test -x "$(LOCAL_
 QEMU_IMG ?= $(shell command -v qemu-img 2>/dev/null || { test -x "$(LOCAL_QEMU_IMG)" && printf '%s' "$(LOCAL_QEMU_IMG)"; })
 GDB ?= $(shell command -v gdb 2>/dev/null || true)
 
-KERNEL_CPPFLAGS := -Ikernel/include
+KERNEL_CPPFLAGS := -Ikernel/include -DKERNEL_TEST_MODE=$(KERNEL_TEST_MODE)
 KERNEL_ARCH_FLAGS := \
 	-m64 \
 	-mcmodel=kernel \
@@ -59,13 +62,15 @@ KERNEL_CFLAGS := \
 	-Wextra \
 	-Werror \
 	-O2 \
-	-g
+	-g \
+	-gdwarf-4
 KERNEL_ASFLAGS := \
 	$(KERNEL_ARCH_FLAGS) \
 	-ffreestanding \
 	-ffile-prefix-map=$(PROJECT_ROOT)=. \
 	-fdebug-prefix-map=$(PROJECT_ROOT)=. \
-	-g
+	-g \
+	-gdwarf-4
 KERNEL_LDFLAGS := \
 	-nostdlib \
 	-static \
@@ -79,9 +84,20 @@ BOOT_ASFLAGS := \
 	-ffreestanding \
 	-fno-pic \
 	-fno-pie \
-	-g
+	-g \
+	-gdwarf-4
 BOOT_LDFLAGS := \
 	-m elf_i386 \
+	--oformat binary
+STAGE2_ASFLAGS := \
+	-m64 \
+	-ffreestanding \
+	-fno-pic \
+	-fno-pie \
+	-g \
+	-gdwarf-4
+STAGE2_LDFLAGS := \
+	-m elf_x86_64 \
 	--oformat binary
 
 KERNEL_C_SOURCES := $(shell find kernel -type f -name '*.c' -print 2>/dev/null | LC_ALL=C sort)
@@ -90,6 +106,14 @@ KERNEL_C_OBJECTS := $(patsubst %.c,$(BUILD_DIR)/%.c.o,$(KERNEL_C_SOURCES))
 KERNEL_ASM_OBJECTS := $(patsubst %.S,$(BUILD_DIR)/%.S.o,$(KERNEL_ASM_SOURCES))
 KERNEL_OBJECTS := $(KERNEL_ASM_OBJECTS) $(KERNEL_C_OBJECTS)
 KERNEL_DEPS := $(KERNEL_OBJECTS:.o=.d)
+M4_DIVIDE_BUILD_DIR := $(BUILD_DIR)/m4-tests/divide
+M4_UNMAPPED_BUILD_DIR := $(BUILD_DIR)/m4-tests/unmapped
+M4_READ_ONLY_BUILD_DIR := $(BUILD_DIR)/m4-tests/read-only
+M4_NX_BUILD_DIR := $(BUILD_DIR)/m4-tests/nx
+M4_DIVIDE_IMAGE := $(M4_DIVIDE_BUILD_DIR)/toy-linux.img
+M4_UNMAPPED_IMAGE := $(M4_UNMAPPED_BUILD_DIR)/toy-linux.img
+M4_READ_ONLY_IMAGE := $(M4_READ_ONLY_BUILD_DIR)/toy-linux.img
+M4_NX_IMAGE := $(M4_NX_BUILD_DIR)/toy-linux.img
 
 QEMU_COMMON_ARGS := \
 	-machine pc \
@@ -127,12 +151,22 @@ $(STAGE1_BIN): $(STAGE1_OBJ)
 		exit 1; \
 	}
 
-$(STAGE2_OBJ): boot/stage2.S | $(BUILD_MARKER)
+$(STAGE2_OBJ): boot/stage2.S $(KERNEL_ELF) | $(BUILD_MARKER)
 	@mkdir -p "$(@D)"
-	$(CC) $(BOOT_ASFLAGS) -c "$<" -o "$@"
+	@kernel_size="$$(stat -c '%s' "$(KERNEL_ELF)")"; \
+	if ((kernel_size > $(KERNEL_STAGING_SIZE))); then \
+		printf 'error: kernel ELF exceeds M2 staging limit (%s > %s bytes)\n' \
+			"$$kernel_size" "$(KERNEL_STAGING_SIZE)" >&2; \
+		exit 1; \
+	fi; \
+	kernel_sectors=$$(((kernel_size + 511) / 512)); \
+	$(CC) $(STAGE2_ASFLAGS) \
+		-DKERNEL_FILE_SIZE="$$kernel_size" \
+		-DKERNEL_SECTORS="$$kernel_sectors" \
+		-c "$<" -o "$@"
 
 $(STAGE2_BIN): $(STAGE2_OBJ)
-	$(LD) $(BOOT_LDFLAGS) -Ttext $(STAGE2_LINK_ADDR) -e stage2_entry -o "$@" "$<"
+	$(LD) $(STAGE2_LDFLAGS) -Ttext $(STAGE2_LINK_ADDR) -e stage2_entry -o "$@" "$<"
 	@test "$$(stat -c '%s' "$@")" -le $$(( $(KERNEL_DISK_OFFSET) - 512 )) || { \
 		printf 'error: stage2 exceeds reserved LBA 1..127\n' >&2; \
 		exit 1; \
@@ -172,7 +206,18 @@ test-boot: $(IMAGE)
 		printf 'error: qemu-system-x86_64 not found; run make doctor or set QEMU=/path/to/qemu-system-x86_64\n' >&2; \
 		exit 1; \
 	}
-	./tools/test-boot.sh "$(QEMU)" "$(IMAGE)"
+	$(MAKE) --no-print-directory \
+		BUILD_DIR="$(M4_DIVIDE_BUILD_DIR)" KERNEL_TEST_MODE=1 image
+	$(MAKE) --no-print-directory \
+		BUILD_DIR="$(M4_UNMAPPED_BUILD_DIR)" KERNEL_TEST_MODE=2 image
+	$(MAKE) --no-print-directory \
+		BUILD_DIR="$(M4_READ_ONLY_BUILD_DIR)" KERNEL_TEST_MODE=3 image
+	$(MAKE) --no-print-directory \
+		BUILD_DIR="$(M4_NX_BUILD_DIR)" KERNEL_TEST_MODE=4 image
+	QEMU_TEST_TIMEOUT="$(QEMU_TEST_TIMEOUT)" \
+		./tools/test-boot.sh "$(QEMU)" "$(IMAGE)" \
+		"$(M4_DIVIDE_IMAGE)" "$(M4_UNMAPPED_IMAGE)" \
+		"$(M4_READ_ONLY_IMAGE)" "$(M4_NX_IMAGE)"
 
 doctor:
 	CC="$(CC)" LD="$(LD)" OBJCOPY="$(OBJCOPY)" READELF="$(READELF)" \
@@ -201,6 +246,8 @@ print-config:
 	@printf 'QEMU=%s\n' "$(QEMU)"
 	@printf 'QEMU_IMG=%s\n' "$(QEMU_IMG)"
 	@printf 'GDB=%s\n' "$(GDB)"
+	@printf 'QEMU_TEST_TIMEOUT=%s\n' "$(QEMU_TEST_TIMEOUT)"
+	@printf 'KERNEL_TEST_MODE=%s\n' "$(KERNEL_TEST_MODE)"
 	@printf 'BUILD_DIR=%s\n' "$(BUILD_DIR)"
 	@printf 'STAGE1_BIN=%s\n' "$(STAGE1_BIN)"
 	@printf 'STAGE2_BIN=%s\n' "$(STAGE2_BIN)"
@@ -221,12 +268,13 @@ clean:
 help:
 	@printf '%s\n' \
 		'make / make image  Build boot stages, kernel ELF, and deterministic disk image' \
-		'make boot          Build the 512-byte stage1 and M1 stage2 stub' \
+		'make boot          Build the 512-byte stage1 and M2 ELF/long-mode loader' \
 		'make kernel        Build only build/kernel/kernel.elf' \
 		'make verify        Validate the ELF and image layout' \
-		'make test-boot     Test normal and corrupt-stage2 boot paths in QEMU' \
+		'make test-boot     Test M4 memory/permissions, M3 IRQs, and M2 error paths' \
+		'                   Override maximum marker wait with QEMU_TEST_TIMEOUT=30s' \
 		'make doctor        Check required and optional host tools' \
-		'make run           Start the bootable M1 image in QEMU' \
+		'make run           Boot through stage2 into the M4 memory-managed kernel' \
 		'make debug         Start paused QEMU with a GDB server on port 1234' \
 		'make print-config  Show resolved tools and build paths' \
 		'make clean         Remove only BUILD_DIR'

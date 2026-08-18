@@ -1,0 +1,10 @@
+#ifndef TINY_LINUX_KERNEL_GDT_H
+#define TINY_LINUX_KERNEL_GDT_H
+
+#define GDT_KERNEL_CODE_SELECTOR 0x08U
+#define GDT_KERNEL_DATA_SELECTOR 0x10U
+#define GDT_TSS_SELECTOR 0x18U
+
+void gdt_init(void);
+
+#endif
