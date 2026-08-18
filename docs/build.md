@@ -1,138 +1,103 @@
-# M0/M1 构建与镜像
+# M0-M2 构建与镜像
 
-## 目标
+## 构建链
 
-M0 建立可重复的 freestanding x86_64 构建链，M1 在此基础上加入 Legacy
-BIOS stage1 和用于验证交接的最小 stage2：
+项目用 Make 驱动 GCC 或 Clang 前端，并用 GNU `ld` 链接：
 
-- 能将 C 和 GNU assembler 编译成不依赖宿主 libc 的 ELF64 内核。
-- 固定 higher-half 虚拟地址与早期物理加载地址。
-- 生成结构确定、可由后续 bootloader 扩展的原始磁盘镜像。
-- 提供工具检测、验证、QEMU 运行和清理入口。
-- 生成严格 512 字节、带 `0xAA55` 签名的 stage1。
-- 用 INT 13h extensions 读取 stage2，并用 VGA/COM1 输出观察交接。
+- stage1：以 `-m32` 汇编，链接为地址 `0x7c00` 的 512-byte raw binary。
+- stage2：以 `-m64` 汇编同一 `.S` 中的 16/32/64-bit 代码，链接到物理
+  `0x8000` 的 raw binary。
+- kernel：以 freestanding x86_64 C/GNU assembler 编译，由
+  `kernel/linker.ld` 链接为静态 higher-half ELF64。
 
-M1 镜像已可由 BIOS 进入 stage1 和 stage2 占位程序，但在 M2 之前不会加载或
-运行 higher-half kernel。
+stage2 依赖 `kernel.elf`。每次汇编 stage2 时，Make 会计算 ELF 文件大小和读取
+扇区数，通过 `KERNEL_FILE_SIZE`、`KERNEL_SECTORS` 宏嵌入 loader。ELF 超过
+256 KiB 时构建直接失败。
+
+内核关键参数包括 `-ffreestanding`、`-fno-builtin`、`-fno-stack-protector`、
+`-fno-pic -fno-pie`、`-mno-red-zone`、`-mno-{mmx,sse,sse2}` 和
+`-mcmodel=kernel`；不链接宿主启动文件或 libc。
+调试信息固定为 DWARF 4，使当前 GNU `readelf` 能无警告读取 GCC/Clang 产物。
 
 ## 常用命令
 
 ```sh
 make doctor
-make
+make image
 make verify
 make test-boot
-make print-config
 make run
 make debug
 make clean
 ```
 
-`make` 等价于 `make image`。构建产物只写入 `build/`。构建目录内含
-`.tiny-linux-kernel-build` 标记；`make clean` 只删除带有该标记的目录，避免错误的
-`BUILD_DIR` 覆盖项目文件。
-
-工具路径可以覆盖：
-
-```sh
-make QEMU=/path/to/qemu-system-x86_64 \
-     QEMU_IMG=/path/to/qemu-img \
-     GDB=/path/to/gdb doctor
-```
-
-也可以覆盖 `CC`、`LD`、`OBJCOPY`、`READELF`、`BUILD_DIR`、
-`QEMU_MEMORY` 和 `QEMU_GDB_PORT`。
-
-## Freestanding 编译约束
-
-内核使用的关键参数包括：
-
-- `-ffreestanding`：不假定标准库和宿主程序启动环境。
-- `-fno-builtin`：不让编译器静默引入 libc 风格调用。
-- `-fno-stack-protector`：早期内核尚无 stack protector runtime。
-- `-fno-pic -fno-pie`：生成由内核链接布局控制的静态地址。
-- `-mno-red-zone`：中断可能使用当前栈，内核不能依赖 red zone。
-- `-mno-mmx -mno-sse -mno-sse2`：初始化扩展寄存器状态前不生成相关指令。
-- `-mcmodel=kernel`：使用 x86_64 higher-half kernel code model。
-
-链接由 `kernel/linker.ld` 完全控制，不链接宿主启动文件或 libc。
+`make` 等价于 `make image`，产物只写入带安全标记的 `build/`。可以覆盖
+`CC`、`LD`、`READELF`、`BUILD_DIR`、`QEMU`、`QEMU_MEMORY` 和
+`QEMU_GDB_PORT`，例如 `make CC=clang image`。
 
 ## 地址与镜像布局
 
-不要混淆以下两个地址：
-
 | 名称 | 值 | 含义 |
 |---|---:|---|
-| `KERNEL_DISK_OFFSET` | 65,536 bytes / LBA 128 | kernel ELF 在磁盘镜像中的位置 |
-| `KERNEL_LMA` | `0x00100000` | ELF segment 预期加载到的物理地址 |
-| `KERNEL_VMA` | `0xffffffff80000000` | 内核链接和执行使用的虚拟地址 |
-
-16 MiB M1 镜像布局：
+| `KERNEL_DISK_OFFSET` | 65,536 bytes / LBA 128 | kernel ELF 在镜像中的位置 |
+| staging address | `0x00020000` | stage2 临时读取完整 ELF 的物理地址 |
+| `KERNEL_LMA` | `0x00100000` | ELF segment 的起始物理加载地址 |
+| `KERNEL_VMA` | `0xffffffff80000000` | 内核链接和执行的起始虚拟地址 |
 
 ```text
 byte 0
 ├── LBA 0                  512 B     stage1.bin，末尾 55 AA
-├── LBA 1                  512 B     M1 stage2.bin，以 S2OK 开头
-├── LBA 2..127          64,512 B     为 M2 stage2 增长保留；当前全零
+├── LBA 1..127          65,024 B     stage2.bin + 零填充，以 S2OK 开头
 ├── LBA 128...                       kernel.elf 原始字节
 └── image end        16,777,216 B    其余区域全零
 ```
 
-stage1 始终将 LBA 1..127 读取到 `0800:0000`。M2 将替换占位 stage2 并从
-LBA 128 读取 ELF。
-改变这些常量前，需要同步修改镜像工具、bootloader 约定和验证。
+stage1 总是把完整 LBA 1..127 读到 `0x8000`。stage2 从 LBA 128 开始按构建时
+扇区数分批读取 kernel ELF，然后根据 program headers 装载 segments。
 
-## 构建产物
+## 构建产物与验证
 
 ```text
 build/
-├── boot/
-│   ├── stage1.bin
-│   ├── stage1.o
-│   ├── stage2.bin
-│   └── stage2.o
-├── kernel/
-│   ├── kernel.elf
-│   └── kernel.map
+├── boot/{stage1,stage2}.{o,bin}
+├── kernel/kernel.elf
+├── kernel/kernel.map
 ├── kernel/.../*.o
 └── toy-linux.img
 ```
 
-`make verify` 检查：
+`make verify` 检查 boot signature、`S2OK`、stage2 保留区、ELF64/x86_64/EXEC、
+higher-half entry、1 MiB LMA、无 dynamic loader/未定义符号/W+X segment、
+256 KiB staging 上限，以及各产物与镜像内容一致。
 
-- stage1 严格为 512 字节，并在字节 510..511 包含 `55 AA`。
-- stage2 不超出 LBA 1..127，并以 `S2OK` 交接头开始。
-- stage1、stage2 和 kernel ELF 在镜像中的字节与独立构建产物一致。
-- 内核为 x86_64 ELF64 executable。
-- entry 位于 higher half。
-- 首个 segment 将 higher-half VMA 映射到 1 MiB LMA，且不存在 W+X segment。
-- 不存在 dynamic loader 或未定义符号。
-- 镜像大小正确。
-- stage2 实际内容与 LBA 128 之间的未用保留区为零。
-- 镜像指定偏移处与 `kernel.elf` 逐字节一致。
+`make test-boot` 在 QEMU 验证：
+
+1. 正常路径进入 long mode，打印 E820，最后输出 `K2:HALT`。
+2. 损坏 stage2 头时输出 `E2`，不交接。
+3. 损坏 ELF magic 时输出 `M2:ELF ERROR`，不进入内核。
+4. 仅提供 1 MiB RAM 时输出 `M2:MEMORY ERROR`，不进入内核。
+
+测试把串口写入临时文件，并持续等待每个场景自己的终止标记。标记出现后立即
+终止并回收 QEMU；默认 30 秒只是最大启动期限，可以针对环境调整：
+
+```sh
+make QEMU_TEST_TIMEOUT=60s test-boot
+```
+
+当前 M2 内核输出 `K2:HALT` 后执行 `HLT`，不会请求 QEMU 进程退出。因此测试
+harness 在观察到终止标记后主动发送 TERM 并 `wait` 回收进程。成功测试不需要
+等待到最大期限。若标记缺失，脚本会打印最大等待时间和串口/QEMU captured output。
 
 ## QEMU 与 GDB
 
-当前环境自动探测到：
+`make run` 使用无图形 QEMU 和 COM1 标准输出，正常启动应依次看到 `S1`、
+`S2`、M2 loader 状态、`K2:LONG MODE OK`、E820 map 和 `K2:HALT`。
 
-```text
-/home/godot/ai_native/QEMU_NET/qemu-build/qemu-system-x86_64
-/home/godot/ai_native/QEMU_NET/qemu-build/qemu-img
-```
-
-`make run` 启动无图形 QEMU，正常情况下串口显示 `S1` 和 `S2`，随后 stage2
-占位程序停机。可按 `Ctrl+C` 终止 QEMU。
-
-`make test-boot` 自动验证正常 `S1 -> S2` 路径，以及损坏 `S2OK` 后的
-`S1 -> E2` 拒绝跳转路径。详细启动契约见 [boot.md](boot.md)。
-
-`make debug` 让 QEMU 以 `-S` 暂停，并在 TCP 1234 提供 GDB server。安装 GDB 后可在
-另一个终端执行：
+`make debug` 在首条指令前暂停，并默认在 TCP 1234 开启 GDB server：
 
 ```sh
 gdb build/kernel/kernel.elf
 (gdb) target remote :1234
 ```
 
-在 M2 之前，GDB 只能调试 BIOS/bootloader 路径，不能直接到达 higher-half
-`kernel_main`。
+完整启动契约见 [boot.md](boot.md)。

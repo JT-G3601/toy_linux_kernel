@@ -6,10 +6,9 @@
 
 > **当前状态**
 >
-> M1 stage1 已完成：项目能构建严格 512 字节的 BIOS boot sector，使用
-> INT 13h extensions 读取 stage2，并在 QEMU 中观察到 `S1 -> S2`。损坏
-> stage2 交接头时，stage1 会输出 `E2` 并拒绝跳转。higher-half kernel ELF
-> 已包含在镜像中，但要到 M2 才会被 stage2 加载和执行。准确进度请查看
+> M2 已完成：stage2 会取得 E820 内存图、验证并装载 ELF64 `PT_LOAD`、建立
+> 临时四级页表并进入 long mode。higher-half 内核已在 QEMU 中运行，能接收
+> `boot_info v1` 并打印 E820；损坏 ELF 和内存不足路径也有自动测试。准确进度请查看
 > [PROJECT_STATUS.md](PROJECT_STATUS.md)。
 
 ## 最终要实现什么
@@ -111,7 +110,7 @@ Makefile 会先检查 `PATH`，再检查当前机器的本地 QEMU 路径，也�
 |---|---|---|
 | M0 | 工程骨架、工具检测、可重复构建 | 完成 |
 | M1 | 512 字节 stage1 | 完成 |
-| M2 | stage2、E820、ELF loader、long mode | 未开始 |
+| M2 | stage2、E820、ELF loader、long mode | 完成 |
 | M3 | console、中断、PIC/PIT、键盘 | 未开始 |
 | M4 | PMM、VMM、最终页表、内核堆 | 未开始 |
 | M5 | 内核线程和抢占式调度 | 未开始 |
@@ -122,6 +121,19 @@ Makefile 会先检查 `PATH`，再检查当前机器的本地 QEMU 路径，也�
 | M10 | 稳定性、压力测试和文档收尾 | 未开始 |
 
 完整任务、验收条件和风险分析见 [plan.md](plan.md)，实时任务状态见 [TASKS.md](TASKS.md)。
+
+## 教科书式实现讲解
+
+每个里程碑除了代码和测试，还必须配套一章从背景开始的实现教材。已完成章节：
+
+- [专题：从按下电源到 `kernel_main` 的完整启动流程](docs/textbook/kernel-boot-deep-dive.md)
+- [M0：从源代码到内核镜像](docs/textbook/m0-build-foundation.md)
+- [M1：BIOS 如何找到 Stage2](docs/textbook/m1-bios-stage1.md)
+- [M2：从 ELF Loader 到 Long Mode](docs/textbook/m2-loader-long-mode.md)
+
+章节包含机器初始状态、实现方法、流程/内存示意图、验证实验、常见误解、练习和
+拓展阅读。从 M3 开始，教材达到 `verified` 是里程碑进入 `done` 的必要条件。
+索引与写作规范见 [docs/textbook/README.md](docs/textbook/README.md)。
 
 ## 构建与运行
 
@@ -138,10 +150,11 @@ make test-boot
 
 - `make doctor`：检查编译器、binutils、QEMU 和可选 GDB。
 - `make` / `make image`：编译 kernel ELF 并生成 `build/toy-linux.img`。
-- `make boot`：只构建 512-byte stage1 和 M1 stage2 占位程序。
+- `make boot`：只构建 512-byte stage1 和 M2 ELF/long-mode loader。
 - `make verify`：检查 boot signature、stage2 交接头、ELF 和磁盘镜像布局。
-- `make test-boot`：用 QEMU 验证正常交接和损坏 stage2 的错误路径。
-- `make run`：运行 M1 镜像，串口应输出 `S1` 和 `S2`。
+- `make test-boot`：用串口终止标记验证正常、损坏 stage2、非法 ELF 和低内存路径，
+  标记出现后主动回收 QEMU；可用 `QEMU_TEST_TIMEOUT=60s` 调整最大等待时间。
+- `make run`：启动至 M2 higher-half 内核并打印 boot info/E820。
 - `make debug`：让 QEMU 暂停在启动位置并开放 GDB remote。
 - `make clean`：只删除 `build/`。
 
@@ -155,7 +168,7 @@ ld
 QEMU 11.0.2（使用上面的本地路径）
 ```
 
-GDB 当前尚未在 `PATH` 中检测到，但它在 M1 是可选工具。构建参数、产物和镜像布局详见
+GDB 当前尚未在 `PATH` 中检测到，但它仍是可选工具。构建参数、产物和镜像布局详见
 [docs/build.md](docs/build.md)，启动契约见 [docs/boot.md](docs/boot.md)。
 
 ## 当前目录导航
@@ -171,23 +184,24 @@ GDB 当前尚未在 `PATH` 中检测到，但它在 M1 是可选工具。构建�
 ├── Makefile               # 构建、验证和 QEMU 入口
 ├── boot/
 │   ├── stage1.S           # 512-byte Legacy BIOS boot sector
-│   └── stage2.S           # M1 交接占位程序
+│   └── stage2.S           # E820、ELF loader、页表与 long-mode 切换
 ├── kernel/
 │   ├── arch/x86_64/       # 64 位内核入口
 │   ├── include/kernel/    # freestanding 公共类型
 │   ├── linker.ld          # higher-half ELF 布局
-│   └── main.c             # M0 内核骨架
+│   └── main.c             # M2 早期串口与 boot info/E820 输出
 ├── docs/
 │   ├── claims/            # 活动/已关闭的写入范围 claim
 │   ├── decisions/         # 完整架构决策
 │   ├── sessions/          # 每次写会话的操作和结果
-│   ├── boot.md            # M1 启动流程、错误码和测试
+│   ├── textbook/          # M0-M10 教科书式实现章节
+│   ├── boot.md            # M2 启动流程、内存布局、错误码和测试
 │   └── build.md           # 构建参数与镜像布局
 └── tools/
     ├── doctor.sh          # 宿主工具检测
     ├── mkimage.sh         # 确定性磁盘镜像生成
     ├── verify-image.sh    # ELF 与镜像检查
-    ├── test-boot.sh       # QEMU 正常/损坏 stage2 测试
+    ├── test-boot.sh       # QEMU 正常与关键失败路径测试
     ├── project-context.sh
     └── check-project-state.sh
 ```

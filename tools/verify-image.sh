@@ -15,6 +15,7 @@ KERNEL_DISK_OFFSET=$6
 READELF=${READELF:-readelf}
 SECTOR_SIZE=512
 STAGE2_DISK_OFFSET=$SECTOR_SIZE
+KERNEL_STAGING_SIZE=$((256 * 1024))
 
 fail() {
     printf 'verify: FAIL: %s\n' "$*" >&2
@@ -87,6 +88,8 @@ if "$READELF" -Ws "$KERNEL_ELF" |
 fi
 
 KERNEL_SIZE=$(stat -c '%s' "$KERNEL_ELF")
+((KERNEL_SIZE <= KERNEL_STAGING_SIZE)) ||
+    fail "kernel is $KERNEL_SIZE bytes, exceeding the $KERNEL_STAGING_SIZE-byte staging area"
 dd if="$IMAGE" bs=1 skip="$KERNEL_DISK_OFFSET" count="$KERNEL_SIZE" status=none |
     cmp -s "$KERNEL_ELF" - ||
     fail "kernel bytes do not match image payload"

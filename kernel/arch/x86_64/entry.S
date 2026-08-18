@@ -7,6 +7,7 @@ _start:
     cli
     leaq bootstrap_stack_top(%rip), %rsp
     xorq %rbp, %rbp
+    /* Stage2 passes struct boot_info * in RDI according to the SysV AMD64 ABI. */
     call kernel_main
 
 .Lhalt:
